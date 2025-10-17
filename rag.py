@@ -29,9 +29,11 @@ def _emb(q: List[str]):
 # Lightweight language guess (en/pt/nl) so English-in → English-out, etc.
 def _guess_lang(text: str) -> str:
     t = text.lower()
-    if any(m in t for m in [" você", " vc ", " quê", " qual", " quais", " onde", " quando", " por que", " porque", " não", " obrigado", " obrigada"]) or re.search(r"[áàâãéêíóôõúç]", t):
+    pt_markers = ["você", "vc ", "quê", "qual", "quais", "onde", "quando", "por que", "porque", "não", "obrigado", "obrigada", "com", "para", "sobre"]
+    nl_markers = ["waar", "hoe", "wat", "wanneer", "welke", "jij", "je ", "niet", "alstublieft", "dank", "met", "naar", "over"]
+    if any(m in t for m in pt_markers) or re.search(r"[áàâãéêíóôõúç]", t):
         return "pt"
-    if any(m in t for m in ["waar", "hoe", "wat", "wanneer", "welke", "jij", "je ", "niet", "alstublieft", "dank", "met", "naar", "over"]):
+    if any(m in t for m in nl_markers):
         return "nl"
     return "en"
 
