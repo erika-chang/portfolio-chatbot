@@ -1,14 +1,13 @@
+# app.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from rag import answer
 
 app = FastAPI(title="RAG Portfolio Bot — Minimal Agent")
 
-# Open CORS so your website can call it (restrict to your domain later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # e.g. ["https://your-site.com"]
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -26,5 +25,7 @@ def health():
 
 @app.post("/ask", response_model=AskRes)
 async def ask(req: AskReq):
+    # ⬇️ lazy import so app can start even if RAG is heavy
+    from rag import answer
     out, cites = await answer(req.question)
     return {"answer": out, "sources": cites}
