@@ -1,4 +1,3 @@
-# Dockerfile (second option variant)
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -11,12 +10,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# (Optional but recommended) cache the model at build so cold start is fast
+# (Optional but recommended) cache the SentenceTransformers model at build time
 ENV SENTENCE_TRANSFORMERS_HOME=/root/.cache/sentence-transformers
-RUN python - <<'PY'\nfrom sentence_transformers import SentenceTransformer\nSentenceTransformer('paraphrase-multilingual-mpnet-base-v2')\nprint('Model cached.')\nPY
+# ⬇️ use python -c instead of a heredoc
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-mpnet-base-v2'); print('Model cached.')"
 
-# Cloud Run sets PORT (usually 8080). Bind to it explicitly.
+# Bind to Cloud Run's PORT
 ENV PORT=8080
 EXPOSE 8080
 
+# Start fast; RAG loads lazily on first request
 ENTRYPOINT ["/bin/sh","-lc","exec uvicorn app:app --host 0.0.0.0 --port ${PORT} --log-level info"]
