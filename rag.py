@@ -1,77 +1,57 @@
+# rag.py
 import json, re
-from typing import List, Tuple
+from pathlib import Path
+from typing import List, Tuple, Optional
 import numpy as np
 import faiss
-from sentence_transformers import SentenceTransformer
 from src.config import Config
-from src.llm.mistral_service import MistralLLMService
 
-DATA_DIR = "data/index"
-INDEX_PATH = f"{DATA_DIR}/faiss.index"
-META_PATH  = f"{DATA_DIR}/meta.json"
+# ---------- lazy singletons ----------
+_embed = None           # SentenceTransformer
+_llm = None             # MistralLLMService
+_index = None           # faiss.Index
+_meta: Optional[list] = None
 
+DATA_DIR = Path("data/index")
+INDEX_PATH = DATA_DIR / "faiss.index"
+META_PATH  = DATA_DIR / "meta.json"
 
-_embed = SentenceTransformer(Config.EMBEDDING_MODEL)
-_llm   = MistralLLMService()
-_index = None
-_meta  = None
-
-# rag.py (top of file)
-_embed = None
-_llm = None
-_index = None
-_meta  = None
-
-def _ensure_models():
-    global _embed, _llm
-    if _embed is None:
-        from sentence_transformers import SentenceTransformer
-        from src.config import Config
-        _embed = SentenceTransformer(Config.EMBEDDING_MODEL)
-    if _llm is None:
-        from src.llm.mistral_service import MistralLLMService
-        _llm = MistralLLMService()
-
-def _ensure_index():
-    import faiss, json
-    from pathlib import Path
-    global _index, _meta
-    if _index is None:
-        p = Path("data/index/faiss.index")
-        m = Path("data/index/meta.json")
-        if not p.exists() or not m.exists():
-            # Graceful: return 0 hits if index missing
-            _index = None
-            _meta = []
-            return
-        _index = faiss.read_index(str(p))
-        _meta  = json.load(m.open(encoding="utf-8"))
-
-def _load_store():
-    global _index, _meta
-    if _index is None:
-        _index = faiss.read_index(INDEX_PATH)
-        with open(META_PATH, "r", encoding="utf-8") as f:
-            _meta = json.load(f)
-
-def _emb(q: List[str]):
-    v = _embed.encode(q, normalize_embeddings=True)
-    return np.array(v, dtype="float32")
-
-# Lightweight language guess (en/pt/nl) so English-in → English-out, etc.
+# --------- tiny language guesser (optional) ----------
 def _guess_lang(text: str) -> str:
     t = text.lower()
-    pt_markers = ["você", "vc ", "quê", "qual", "quais", "onde", "quando", "por que", "porque", "não", "obrigado", "obrigada", "com", "para", "sobre"]
-    nl_markers = ["waar", "hoe", "wat", "wanneer", "welke", "jij", "je ", "niet", "alstublieft", "dank", "met", "naar", "over"]
-    if any(m in t for m in pt_markers) or re.search(r"[áàâãéêíóôõúç]", t):
+    if any(m in t for m in [" você", " vc ", " quê", " qual", " quais", " onde", " quando", " por que", " porque", " não", " obrigado", " obrigada"]) or re.search(r"[áàâãéêíóôõúç]", t):
         return "pt"
-    if any(m in t for m in nl_markers):
+    if any(m in t for m in ["waar", "hoe", "wat", "wanneer", "welke", "jij", "je ", "niet", "alstublieft", "dank", "met", "naar", "over"]):
         return "nl"
     return "en"
 
 def _lang_name(code: str) -> str:
     return {"en": "English", "pt": "Portuguese", "nl": "Dutch"}.get(code, "English")
 
+# ---------- ensure/init helpers ----------
+def _ensure_models():
+    """Load SentenceTransformer + LLM client once, on demand."""
+    global _embed, _llm
+    if _embed is None:
+        from sentence_transformers import SentenceTransformer
+        _embed = SentenceTransformer(Config.EMBEDDING_MODEL)
+    if _llm is None:
+        from src.llm.mistral_service import MistralLLMService
+        _llm = MistralLLMService()
+
+def _ensure_index():
+    """Load FAISS + metadata if present; otherwise keep None (graceful)."""
+    global _index, _meta
+    if _index is not None and _meta is not None:
+        return
+    if not (INDEX_PATH.exists() and META_PATH.exists()):
+        _index, _meta = None, []
+        return
+    _index = faiss.read_index(str(INDEX_PATH))
+    with META_PATH.open("r", encoding="utf-8") as f:
+        _meta = json.load(f)
+
+# ---------- prompts ----------
 BASE_SYSTEM_PROMPT = (
     "You are Erika's friendly portfolio assistant 🤖💫.\n"
     "Use only the provided context; if information is missing, reply: 'I don't know based on the current document.'\n"
@@ -79,8 +59,16 @@ BASE_SYSTEM_PROMPT = (
     "Add 1–2 tasteful emojis when appropriate (e.g., 😊💡📊✨🎯). Never invent facts."
 )
 
+def _emb(q: List[str]) -> np.ndarray:
+    _ensure_models()
+    v = _embed.encode(q, normalize_embeddings=True)
+    return np.array(v, dtype="float32")
+
 def retrieve(question: str) -> List[dict]:
-    _load_store()
+    _ensure_models()
+    _ensure_index()
+    if _index is None or not _meta:
+        return []  # no index available; caller will handle gracefully
     q = _emb([question])
     faiss.normalize_L2(q)
     scores, idxs = _index.search(q, Config.TOP_K)
@@ -89,10 +77,7 @@ def retrieve(question: str) -> List[dict]:
         if i == -1:
             continue
         doc = _meta[i]
-        out.append({
-            "text": doc["text"],
-            "source": doc.get("source", "document")
-        })
+        out.append({"text": doc["text"], "source": doc.get("source", "document")})
     return out
 
 def build_context(snips: List[dict]) -> str:
@@ -103,8 +88,7 @@ def _distinct_sources(hits: List[dict], limit: int = 3) -> List[str]:
     for h in hits:
         src = h.get("source", "document")
         if src not in seen:
-            seen.add(src)
-            cites.append(src)
+            seen.add(src); cites.append(src)
         if len(cites) >= limit:
             break
     return cites
@@ -114,33 +98,31 @@ async def answer(question: str) -> Tuple[str, List[dict]]:
     code = _guess_lang(question)
 
     if not hits:
+        # reply in the user's language if we can guess it
         msg = {
             "en": "I don't know based on the current document 🤷‍♀️",
             "pt": "Não sei com base no documento atual 🤷‍♀️",
-            "nl": "Ik weet het niet op basis van het huidige document 🤷‍♀️",
+            "nl": "Ik weet het nicht op basis van het huidige document 🤷‍♀️",
         }.get(code, "I don't know based on the current document 🤷‍♀️")
         return (msg, [])
 
     ctx = build_context(hits)
     target_language = _lang_name(code)
+    system_prompt = BASE_SYSTEM_PROMPT + f"\n\nIMPORTANT: Always respond in {target_language}."
 
-    system_prompt = (
-        BASE_SYSTEM_PROMPT
-        + f"\n\nIMPORTANT: Always respond in {target_language} regardless of the context language."
-    )
-
-    prompt = (
+    user_prompt = (
         "Task: Provide a friendly, natural answer using ONLY the information below. "
         "If a list is requested, use up to 3 concise bullets. "
         "Add 1–2 relevant emojis, but don't overdo it.\n"
         f"Question: {question}\n\nContext:\n{ctx}"
     )
 
+    # _ensure_models already created _llm
     text = await _llm.generate_response(
-        prompt,
+        user_prompt,
         system=system_prompt,
         temperature=max(Config.TEMPERATURE, 0.4),
-        max_tokens=400
+        max_tokens=400,
     )
 
     citations = [{"source": s} for s in _distinct_sources(hits)]
