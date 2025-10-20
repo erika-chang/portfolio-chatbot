@@ -1,0 +1,18 @@
+# Test runner
+pytest>=8.3
+pytest-cov>=5.0
+requests>=2.32
+
+# Embeddings e utilidades para heurísticas de grounding
+sentence-transformers>=3.0
+numpy>=1.26
+
+# RAGAS - métricas formais (opcional, mas recomendado)
+ragas>=0.1.9
+datasets>=2.20
+evaluate>=0.4.2
+pandas>=2.2
+scikit-learn>=1.4
+
+# Leitura de PDFs (para compor contexto bruto, se necessário)
+pypdf>=4.3
