@@ -1,4 +1,4 @@
-# Builds a FAISS index from ONE document in data/source/ (PDF/MD/TXT)
+# Builds a FAISS index from all documents in data/source/ and subfolders (PDF/MD/TXT)
 import os, json
 from pathlib import Path
 from typing import List, Dict
@@ -39,29 +39,40 @@ def main():
         src = SRC_DIR / target
         if not src.exists():
             raise SystemExit(f"File not found: {src}")
+        files = [src]
     else:
-        files = [p for p in SRC_DIR.glob("*") if p.suffix.lower() in {".pdf", ".md", ".txt"}]
+        files = [p for p in SRC_DIR.rglob("*") if p.is_file() and p.suffix.lower() in {".pdf", ".md", ".txt"}]
         if not files:
-            raise SystemExit("Put 1 document in data/source/ (PDF/MD/TXT)")
-        src = files[0]
+            raise SystemExit("No documents found in data/source/ (PDF/MD/TXT)")
 
-    text = _load_text(src)
-    chunks = _split(text)
-    vecs = _embed.encode(chunks, normalize_embeddings=True)
-    vecs = np.array(vecs, dtype="float32")
+    all_chunks = []
+    all_metas = []
+    all_vecs_list = []
 
-    index = faiss.IndexFlatIP(vecs.shape[1])
-    faiss.normalize_L2(vecs)
-    index.add(vecs)
+    for file in files:
+        text = _load_text(file)
+        chunks = _split(text)
+        vecs = _embed.encode(chunks, normalize_embeddings=True)
+        vecs = np.array(vecs, dtype="float32")
+        all_vecs_list.append(vecs)
+        all_chunks.extend(chunks)
+        source_name = str(file.relative_to(SRC_DIR))
+        all_metas.extend([{"source": source_name, "text": c} for c in chunks])
 
-    IDX_DIR.mkdir(parents=True, exist_ok=True)
-    faiss.write_index(index, str(IDX_DIR / "faiss.index"))
+    if all_vecs_list:
+        all_vecs = np.concatenate(all_vecs_list, axis=0)
+        index = faiss.IndexFlatIP(all_vecs.shape[1])
+        index.add(all_vecs)
 
-    meta: List[Dict] = [{"source": src.name, "text": c} for c in chunks]
-    with open(IDX_DIR / "meta.json", "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False)
+        IDX_DIR.mkdir(parents=True, exist_ok=True)
+        faiss.write_index(index, str(IDX_DIR / "faiss.index"))
 
-    print(f"Indexed {len(chunks)} chunks from {src.name}")
+        with open(IDX_DIR / "meta.json", "w", encoding="utf-8") as f:
+            json.dump(all_metas, f, ensure_ascii=False)
+
+        print(f"Indexed {len(all_chunks)} chunks from {len(files)} files")
+    else:
+        print("No chunks to index")
 
 if __name__ == "__main__":
     main()
