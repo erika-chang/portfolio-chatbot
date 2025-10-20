@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN python ingest.py
+
 # (Optional but recommended) cache the SentenceTransformers model at build time
 ENV SENTENCE_TRANSFORMERS_HOME=/root/.cache/sentence-transformers
 # ⬇️ use python -c instead of a heredoc

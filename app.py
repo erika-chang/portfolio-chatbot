@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import pathlib
 
 app = FastAPI(title="RAG Portfolio Bot — Minimal Agent")
 
@@ -29,3 +30,13 @@ async def ask(req: AskReq):
     from rag import answer
     out, cites = await answer(req.question)
     return {"answer": out, "sources": cites}
+
+@app.get("/_debug_status")
+def _debug_status():
+    idx = pathlib.Path("data/index/faiss.index").exists()
+    meta = pathlib.Path("data/index/meta.json").exists()
+    src_files = []
+    p = pathlib.Path("data/source")
+    if p.exists():
+        src_files = [str(x.name) for x in p.iterdir() if x.is_file()]
+    return {"index_present": idx, "meta_present": meta, "source_files": src_files}
