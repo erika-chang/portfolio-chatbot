@@ -132,9 +132,9 @@ Example output:
 }
 ```
 
-🛠️ Future Enhancements
-Add streaming responses
+## 🛠️ Future Enhancements
+- Add streaming responses
 
-Add confidence scores for context retrieval
+- Add confidence scores for context retrieval
 
-Optional authentication and rate limiting
+- Optional authentication and rate limiting
