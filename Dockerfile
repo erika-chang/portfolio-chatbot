@@ -1,30 +1,25 @@
-# ========= STAGE 1: builder =========
+# ========= STAGE 1: builder (instala SOMENTE deps de produção) =========
 FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# Tooling apenas para build de wheels (isolado no builder)
+# Toolchain isolado no builder (se alguma wheel precisar compilar)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential \
-      gcc \
-      g++ \
-      git \
-      ca-certificates \
+      build-essential gcc g++ git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Camada cacheável: requirements primeiro
-COPY requirements.txt /app/requirements.txt
+# Use o arquivo de produção (sem torch/transformers/sentence-transformers)
+# Crie: requirements_runtime.txt
+COPY requirements_runtime.txt /app/requirements.txt
 RUN python -m venv /opt/venv && . /opt/venv/bin/activate && \
     pip install --upgrade pip && \
-    pip install -r /app/requirements.txt
+    pip install --no-cache-dir -r /app/requirements.txt
 
-# (Não copiamos o código para o builder — mantemos a imagem final limpa)
-
-# ========= STAGE 2: runtime =========
+# ========= STAGE 2: runtime (mínimo possível) =========
 FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -33,25 +28,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TRANSFORMERS_CACHE=/tmp/hf-cache \
     HF_HOME=/tmp/hf-cache
 
-# Somente libs de runtime (inclui wget para o HEALTHCHECK)
+# Somente libs de execução (wget para o healthcheck; libgomp para faiss-cpu)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libgomp1 \
-      tini \
-      wget \
+      libgomp1 tini wget \
     && rm -rf /var/lib/apt/lists/*
 
-# venv preparada no builder
+# Trazer a venv pronta do builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /app
 
-# Copiar apenas o necessário para rodar
+# Copiar apenas o necessário para rodar a API
 COPY app.py /app/app.py
 COPY src/ /app/src/
 COPY ingest.py /app/ingest.py
 
-# Garantir diretório do índice (não copiamos data/index do host)
+# Não empacotamos data/index no build; só garantimos o diretório
 RUN mkdir -p /app/data/index
 
 # Usuário não-root

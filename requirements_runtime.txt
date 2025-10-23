@@ -1,0 +1,5 @@
+fastapi==0.115.2
+uvicorn==0.30.6
+faiss-cpu==1.8.0.post1
+numpy
+pydantic==2.9.2
