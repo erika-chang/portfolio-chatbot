@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 # Toolchain isolado no builder (se alguma wheel precisar compilar)
+# Mantém a imagem final leve (estas camadas não vão para o runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential gcc g++ git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -13,11 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Use o arquivo de produção (sem torch/transformers/sentence-transformers)
-# Crie: requirements_runtime.txt
+# Requer: requirements_runtime.txt incluir fastapi, uvicorn, faiss-cpu, numpy, google-cloud-storage, etc.
 COPY requirements_runtime.txt /app/requirements.txt
 RUN python -m venv /opt/venv && . /opt/venv/bin/activate && \
     pip install --upgrade pip && \
     pip install --no-cache-dir -r /app/requirements.txt
+
 
 # ========= STAGE 2: runtime (mínimo possível) =========
 FROM python:3.11-slim AS runtime
@@ -25,15 +27,15 @@ FROM python:3.11-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    TRANSFORMERS_CACHE=/tmp/hf-cache \
-    HF_HOME=/tmp/hf-cache
+    # Usamos /tmp para o índice (writable em Cloud Run) — nada é copiado no build
+    INDEX_DIR=/tmp/index
 
 # Somente libs de execução (wget para o healthcheck; libgomp para faiss-cpu)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libgomp1 tini wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Trazer a venv pronta do builder
+# venv pronta do builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
@@ -42,10 +44,6 @@ WORKDIR /app
 # Copiar apenas o necessário para rodar a API
 COPY app.py /app/app.py
 COPY src/ /app/src/
-COPY ingest.py /app/ingest.py
-
-# Não empacotamos data/index no build; só garantimos o diretório
-RUN mkdir -p /app/data/index
 
 # Usuário não-root
 RUN useradd -u 10001 -m appuser

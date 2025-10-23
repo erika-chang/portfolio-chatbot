@@ -3,3 +3,4 @@ uvicorn==0.30.6
 faiss-cpu==1.8.0.post1
 numpy
 pydantic==2.9.2
+google-cloud-storage
