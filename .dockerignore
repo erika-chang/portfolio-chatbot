@@ -1,0 +1,52 @@
+# Python caches e envs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.eggs
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# VCS e IDE
+.git/
+.gitignore
+.gitattributes
+.github/
+.vscode/
+.idea/
+
+# Data — excluir tudo por padrão; permitir só o índice leve
+data/**
+!data/index/**
+!data/index/faiss.index
+!data/index/meta.json
+
+# Tests e notebooks
+tests/
+*.ipynb
+.ipynb_checkpoints/
+
+# Logs e artefatos grandes
+*.log
+artifacts/
+checkpoints/
+models/
+datasets/
+tmp/
+.cache/
+.huggingface/
+.cache/huggingface/
+transformers_cache/
+
+# Docker & compose
+Dockerfile*
+docker-compose*.yml
+
+# Miscelânea pesada
+*.csv
+*.parquet
+*.sqlite
+*.db

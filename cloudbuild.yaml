@@ -1,0 +1,50 @@
+substitutions:
+  _REGION: europe-west4
+  _SERVICE: portfolio-chatbot
+  _REPO: cloud-run-source-deploy
+  _IMAGE_NAME: portfolio-chatbot
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
+      - '-f'
+      - 'Dockerfile'
+      - '.'
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: GET-DIGEST
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        DIGEST=$(gcloud artifacts docker images list \
+          europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
+          --format='value(version)' \
+          --include-tags=false | head -n 1)
+        echo "DIGEST=$DIGEST" | tee /workspace/digest.txt
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: DEPLOY
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        source /workspace/digest.txt
+        gcloud run deploy ${_SERVICE} \
+          --region ${_REGION} \
+          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@${DIGEST} \
+          --allow-unauthenticated
+
+images:
+  - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
