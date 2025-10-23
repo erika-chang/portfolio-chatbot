@@ -44,7 +44,8 @@ COPY app.py /app/app.py
 COPY src/ /app/src/
 COPY ingest.py /app/ingest.py
 
-COPY data/index/ /app/data/index/
+# Não empacotamos data/index no build; só garantimos o diretório
+RUN mkdir -p /app/data/index
 
 # Usuário não-root
 RUN useradd -u 10001 -m appuser
