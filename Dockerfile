@@ -56,7 +56,8 @@ COPY src/ /app/src/
 COPY ingest.py /app/ingest.py
 
 # (Opcional) incluir um índice pequeno já pronto; fontes ficam fora da imagem
-COPY data/index/ /app/data/index/
+#COPY data/index/ /app/data/index/
+RUN mkdir -p /app/data/index
 
 # Usuário não-root
 RUN useradd -u 10001 -m appuser
