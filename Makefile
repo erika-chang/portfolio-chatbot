@@ -23,8 +23,6 @@ ingest-venv: check-ing-req
 
 # Gera o índice FAISS fora da imagem (usa ingest.py)
 ingest: ingest-venv
-	mkdir -p $(SRC_DIR) $(IDX_DIR)
-	# Coloque seus PDFs/TXT/MD em $(SRC_DIR) antes de rodar
 	$(PYTHON) ingest.py
 
 # Limpa índice e venv de ingestão (não afeta a imagem)
