@@ -39,6 +39,7 @@ steps:
 
   # 4) Deploy no Cloud Run por **digest**
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: DEPLOY
     entrypoint: bash
     args:
@@ -47,7 +48,7 @@ steps:
         source /workspace/digest.txt
         gcloud run deploy ${_SERVICE} \
           --region ${_REGION} \
-          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$${DIGEST} \
+          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$$DIGEST \
           --allow-unauthenticated
 
 images:
