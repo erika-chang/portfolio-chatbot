@@ -24,19 +24,25 @@ steps:
       - push
       - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
 
-  # 3) Deploy por DIGEST (inline, sem variáveis do tipo ${...})
+  # 3) Deploy por DIGEST (mais recente, ordenado por updateTime desc)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: DEPLOY
     entrypoint: bash
     args:
       - -c
       - |
+        DIGEST=$(gcloud artifacts docker images list \
+          europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
+          --format='value(version)' \
+          --sort-by=~updateTime \
+          --limit=1)
+        if [ -z "$DIGEST" ]; then
+          echo "Falha: nenhum digest encontrado no Artifact Registry."
+          exit 1
+        fi
         gcloud run deploy ${_SERVICE} \
           --region ${_REGION} \
-          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$(gcloud artifacts docker images list \
-              europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
-              --format='value(version)' \
-              --include-tags=false | head -n 1) \
+          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$DIGEST \
           --allow-unauthenticated
 
 images:

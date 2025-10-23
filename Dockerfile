@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# Tooling only for build of wheels if needed
+# Tooling apenas para build de wheels (isolado no builder)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
       gcc \
@@ -15,19 +15,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY app.py /app/app.py
-COPY src/ /app/src/
-COPY ingest.py /app/ingest.py
 
-# >>> Substitua o bloco de índice por:
-RUN mkdir -p /app/data/index
-# (não fazemos COPY de data/index)
-
-# Cache-friendly layer: requirements first
+# Camada cacheável: requirements primeiro
 COPY requirements.txt /app/requirements.txt
 RUN python -m venv /opt/venv && . /opt/venv/bin/activate && \
     pip install --upgrade pip && \
     pip install -r /app/requirements.txt
+
+# (Não copiamos o código para o builder — mantemos a imagem final limpa)
 
 # ========= STAGE 2: runtime =========
 FROM python:3.11-slim AS runtime
@@ -38,25 +33,25 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TRANSFORMERS_CACHE=/tmp/hf-cache \
     HF_HOME=/tmp/hf-cache
 
-# Runtime libs only (faiss-cpu usa OpenMP via libgomp1)
+# Somente libs de runtime (inclui wget para o HEALTHCHECK)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libgomp1 \
       tini \
+      wget \
     && rm -rf /var/lib/apt/lists/*
 
-# venv do builder
+# venv preparada no builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /app
 
-# Copiar somente o necessário
+# Copiar apenas o necessário para rodar
 COPY app.py /app/app.py
 COPY src/ /app/src/
 COPY ingest.py /app/ingest.py
 
-# (Opcional) incluir um índice pequeno já pronto; fontes ficam fora da imagem
-#COPY data/index/ /app/data/index/
+# Garantir diretório do índice (não copiamos data/index do host)
 RUN mkdir -p /app/data/index
 
 # Usuário não-root
