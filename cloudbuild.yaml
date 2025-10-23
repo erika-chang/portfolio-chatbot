@@ -31,19 +31,16 @@ steps:
     args:
       - -c
       - |
-        DIGEST=$(gcloud artifacts docker images list \
-          europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
-          --format='value(version)' \
-          --sort-by=~updateTime \
-          --limit=1)
-        if [ -z "$DIGEST" ]; then
-          echo "Falha: nenhum digest encontrado no Artifact Registry."
-          exit 1
-        fi
+        set -euo pipefail
         gcloud run deploy ${_SERVICE} \
           --region ${_REGION} \
-          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$$DIGEST \
+          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$(gcloud artifacts docker images list \
+              europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
+              --format='value(version)' \
+              --sort-by=~updateTime \
+              --limit=1) \
           --allow-unauthenticated
+
 
 images:
   - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
