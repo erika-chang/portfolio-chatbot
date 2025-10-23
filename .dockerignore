@@ -23,6 +23,7 @@ data/**
 !data/index/**
 !data/index/faiss.index
 !data/index/meta.json
+!data/index/.gitkeep
 
 # Tests e notebooks
 tests/

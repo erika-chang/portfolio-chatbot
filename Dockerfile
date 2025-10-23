@@ -15,6 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY app.py /app/app.py
+COPY src/ /app/src/
+COPY ingest.py /app/ingest.py
+
+# >>> Substitua o bloco de índice por:
+RUN mkdir -p /app/data/index
+# (não fazemos COPY de data/index)
 
 # Cache-friendly layer: requirements first
 COPY requirements.txt /app/requirements.txt
