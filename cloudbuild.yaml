@@ -8,6 +8,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # 1) Build
   - name: gcr.io/cloud-builders/docker
     args:
       - build
@@ -17,11 +18,13 @@ steps:
       - 'Dockerfile'
       - '.'
 
+  # 2) Push
   - name: gcr.io/cloud-builders/docker
     args:
       - push
       - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
 
+  # 3) Capturar o digest da imagem enviada
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: GET-DIGEST
     entrypoint: bash
@@ -34,6 +37,7 @@ steps:
           --include-tags=false | head -n 1)
         echo "DIGEST=$DIGEST" | tee /workspace/digest.txt
 
+  # 4) Deploy no Cloud Run por **digest**
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: DEPLOY
     entrypoint: bash
@@ -43,7 +47,7 @@ steps:
         source /workspace/digest.txt
         gcloud run deploy ${_SERVICE} \
           --region ${_REGION} \
-          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@${DIGEST} \
+          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$${DIGEST} \
           --allow-unauthenticated
 
 images:
