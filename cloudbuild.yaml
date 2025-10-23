@@ -1,7 +1,7 @@
 substitutions:
   _REGION: europe-west4
   _SERVICE: portfolio-chatbot
-  _REPO: cloud-run-source-deploy
+  _REPO: services
   _IMAGE_NAME: portfolio-chatbot
 
 options:
