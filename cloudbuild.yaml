@@ -24,31 +24,19 @@ steps:
       - push
       - 'europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}'
 
-  # 3) Capturar o digest da imagem enviada
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: GET-DIGEST
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        DIGEST=$(gcloud artifacts docker images list \
-          europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
-          --format='value(version)' \
-          --include-tags=false | head -n 1)
-        echo "DIGEST=$DIGEST" | tee /workspace/digest.txt
-
-  # 4) Deploy no Cloud Run por **digest**
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  # 3) Deploy por DIGEST (inline, sem variáveis do tipo ${...})
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: DEPLOY
     entrypoint: bash
     args:
       - -c
       - |
-        source /workspace/digest.txt
         gcloud run deploy ${_SERVICE} \
           --region ${_REGION} \
-          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$$DIGEST \
+          --image europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME}@$(gcloud artifacts docker images list \
+              europe-west4-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE_NAME} \
+              --format='value(version)' \
+              --include-tags=false | head -n 1) \
           --allow-unauthenticated
 
 images:
