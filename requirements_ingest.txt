@@ -1,6 +1,8 @@
-sentence-transformers==3.1.1
-transformers==4.44.2
-torch==2.4.1
-pypdf==5.0.1
-numpy
+fastapi
+uvicorn
 faiss-cpu==1.8.0.post1
+numpy
+pydantic
+google-cloud-storage
+mistralai    # cliente oficial Mistral
+httpx        # (se preferir REST direto)

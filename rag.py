@@ -1,16 +1,19 @@
 # rag.py
-import json, re
+import json, re, os
 from pathlib import Path
 from typing import List, Tuple, Optional
 import numpy as np
 import faiss
 from src.config import Config
+from mistralai import MistralClient, Mistral
 
 # ---------- lazy singletons ----------
 _embed = None           # SentenceTransformer
 _llm = None             # MistralLLMService
 _index = None           # faiss.Index
 _meta: Optional[list] = None
+_client = None
+_model = "mistral-embed"
 
 DATA_DIR = Path("data/index")
 INDEX_PATH = DATA_DIR / "faiss.index"
@@ -53,6 +56,24 @@ def _ensure_index():
     with META_PATH.open("r", encoding="utf-8") as f:
         _meta = json.load(f)
 
+def get_index_and_meta():
+    _ensure_index()
+    return _index, _meta
+
+def _client_mistral():
+    global _client
+    if _client is None:
+        _client = MistralClient(api_key=os.getenv("MISTRAL_API_KEY"))
+    return _client
+
+def _client_mistral_embed():
+    global _embed_client
+    if _embed_client is None:
+        _embed_client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
+    return _embed_client
+
+_embed_client = None
+
 # ---------- prompts ----------
 FALLBACK_BY_LANG = {
     "en": "I don't know based on the current document 🤷‍♀️",
@@ -61,7 +82,7 @@ FALLBACK_BY_LANG = {
 }
 
 BASE_SYSTEM_PROMPT = """
-You are Erika Chang de Azevedo’s portfolio assistant.
+You are Erika Chang de Azevedo’s portfolio assistant. Your name is Garnet 🐱.
 
 PURPOSE
 - Help visitors explore Erika’s professional background, skills, projects, education, and career transition.
@@ -103,20 +124,26 @@ def _emb(q: List[str]) -> np.ndarray:
     v = _embed.encode(q, normalize_embeddings=True)
     return np.array(v, dtype="float32")
 
+def embed_query_mistral(question: str) -> np.ndarray:
+    client = _client_mistral_embed()
+    res = client.embeddings.create(model=_model, inputs=[question])
+    vec = np.array(res.data[0].embedding, dtype="float32")
+    faiss.normalize_L2(vec.reshape(1, -1))
+    return vec.flatten()
+
 def retrieve(question: str) -> List[dict]:
-    _ensure_models()
-    _ensure_index()
-    if _index is None or not _meta:
+    index, meta = get_index_and_meta()
+    if index is None or not meta:
         return []  # no index available; caller will handle gracefully
-    q = _emb([question])
-    faiss.normalize_L2(q)
-    scores, idxs = _index.search(q, Config.TOP_K)
+    qv = embed_query_mistral(question)
+    k = 5
+    scores, ids = index.search(qv.reshape(1, -1), k)
     out = []
-    for s, i in zip(scores[0], idxs[0]):
+    for s, i in zip(scores[0], ids[0]):
         if i == -1:
             continue
-        doc = _meta[i]
-        out.append({"text": doc["text"], "source": doc.get("source", "document")})
+        text = meta["texts"][i]
+        out.append({"text": text, "source": "document"})  # assuming source is document for now
     return out
 
 def build_context(snips: List[dict]) -> str:

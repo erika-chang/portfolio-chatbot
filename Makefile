@@ -25,6 +25,14 @@ ingest-venv: check-ing-req
 ingest: ingest-venv
 	$(PYTHON) ingest.py
 
+ingest-mistral: ingest-venv
+	$(PYTHON) ingest_mistral.py
+
+load-bucket:
+	gsutil cp $(IDX_DIR)/faiss.index gs://portfolio-chatbot-index/
+	gsutil cp $(IDX_DIR)/meta.json  gs://portfolio-chatbot-index/
+
+
 # Limpa índice e venv de ingestão (não afeta a imagem)
 ingest-clean:
 	rm -rf $(IDX_DIR)/*
@@ -33,3 +41,6 @@ ingest-clean:
 # Verificação: exige requirements_ingest.txt
 check-ing-req:
 	@test -f $(ING_REQ) || (echo "ERRO: $(ING_REQ) não encontrado. Crie-o com deps de ingestão (torch, transformers, sentence-transformers, pypdf, numpy, etc.)."; exit 1)
+
+build-deploy:
+	gcloud builds submit --config cloudbuild.yaml .
